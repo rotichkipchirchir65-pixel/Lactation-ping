@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <title>SPARK-X Logger</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
   <style>
     html, body {
       margin: 0;
       padding: 0;
       background: black;
       overflow: hidden;
-      color: #00ffcc;
-      font-family: monospace;
+      font-family: 'Fira Code', monospace;
     }
     canvas {
       position: fixed;
@@ -20,15 +20,21 @@
     }
     #log {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      top: 20px;
+      left: 20px;
       z-index: 1;
-      background: rgba(0,0,0,0.6);
-      padding: 10px;
+      padding: 16px 20px;
       max-width: 90%;
-      font-size: 12px;
+      font-size: 13px;
       white-space: pre-wrap;
       word-break: break-word;
+      color: #00ff88;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(0, 255, 136, 0.4);
+      border-radius: 8px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+      text-shadow: 0 0 3px #00ff88;
     }
   </style>
 </head>
