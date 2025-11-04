@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SPARK-X Logger</title>
+  <title>SPARK-X Private Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
   <style>
     html, body {
@@ -40,15 +40,16 @@
 </head>
 <body>
   <canvas id="matrix"></canvas>
-  <div id="log">Loading...</div>
+  <div id="log">Loading SPARK-X dashboard...</div>
 
   <script>
     const logBox = document.getElementById("log");
 
-    async function logDeviceAndLocation() {
+    async function buildDashboard() {
       const log = {
         clicked: true,
         timestamp: new Date().toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         userAgent: navigator.userAgent,
         platform: navigator.platform,
         screen: {
@@ -58,6 +59,11 @@
         },
         language: navigator.language,
         connection: navigator.connection?.type || "unknown",
+        appContext: {
+          facebook: navigator.userAgent.includes("FB"),
+          instagram: navigator.userAgent.includes("Instagram"),
+          whatsapp: navigator.userAgent.includes("WhatsApp")
+        },
         battery: "unsupported",
         location: "pending"
       };
@@ -91,25 +97,25 @@
             };
 
             logBox.textContent = JSON.stringify(log, null, 2);
-            console.log("📡 SPARK-X Full Log:", log);
+            console.log("📡 SPARK-X Dashboard:", log);
           } catch {
             log.location = { latitude: lat, longitude: lon, area: "reverse lookup failed" };
             logBox.textContent = JSON.stringify(log, null, 2);
-            console.log("📡 SPARK-X Full Log:", log);
+            console.log("📡 SPARK-X Dashboard:", log);
           }
         }, error => {
           log.location = "location error: " + error.message;
           logBox.textContent = JSON.stringify(log, null, 2);
-          console.log("📡 SPARK-X Full Log:", log);
+          console.log("📡 SPARK-X Dashboard:", log);
         });
       } else {
         log.location = "geolocation not supported";
         logBox.textContent = JSON.stringify(log, null, 2);
-        console.log("📡 SPARK-X Full Log:", log);
+        console.log("📡 SPARK-X Dashboard:", log);
       }
     }
 
-    logDeviceAndLocation();
+    buildDashboard();
 
     // Matrix animation
     const canvas = document.getElementById("matrix");
