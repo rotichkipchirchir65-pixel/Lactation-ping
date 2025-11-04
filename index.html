@@ -2,128 +2,221 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SPARK-X Private Dashboard</title>
+  <title>SPARK-X Wi-Fi + Voucher + Device Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: black;
-      overflow: hidden;
+    body {
+      background: #0f0f0f;
+      color: #00ff88;
       font-family: 'Fira Code', monospace;
+      padding: 20px;
+      position: relative;
+      z-index: 1;
     }
-    canvas {
+    input, button {
+      font-family: inherit;
+      padding: 8px;
+      margin: 6px 4px;
+      background: #111;
+      color: #00ff88;
+      border: 1px solid #00ff88;
+      border-radius: 4px;
+    }
+    #log {
+      white-space: pre-wrap;
+      margin-top: 20px;
+      background: rgba(0,255,136,0.1);
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #00ff88;
+      box-shadow: 0 0 10px rgba(0,255,136,0.3);
+      position: relative;
+      z-index: 1;
+    }
+    canvas#matrix {
       position: fixed;
       top: 0;
       left: 0;
       z-index: 0;
-    }
-    #log {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      z-index: 1;
-      padding: 16px 20px;
-      max-width: 90%;
-      font-size: 13px;
-      white-space: pre-wrap;
-      word-break: break-word;
-      color: #00ff88;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(0, 255, 136, 0.4);
-      border-radius: 8px;
-      backdrop-filter: blur(6px);
-      box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
-      text-shadow: 0 0 3px #00ff88;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
   <canvas id="matrix"></canvas>
-  <div id="log">Loading SPARK-X dashboard...</div>
+
+  <h1>📡 SPARK-X Wi-Fi + Voucher + Device Tracker</h1>
+
+  <h3>🔐 Voucher Activation</h3>
+  <input type="text" id="voucher" placeholder="Enter voucher code (e.g. FBJVSD8)">
+  <button onclick="addVoucher()">Activate Voucher</button>
+  <button onclick="clearVouchers()">Clear Vouchers</button>
+
+  <h3>⏱ Session Control</h3>
+  <button onclick="startSession()">Start Session</button>
+  <button onclick="extendSession(30)">Extend +30 min</button>
+  <button onclick="extendSession(60)">Extend +1 hour</button>
+
+  <div id="log">No session or voucher activity yet.</div>
 
   <script>
-    const logBox = document.getElementById("log");
+    let session = {};
+    let countdownInterval;
+    let vouchers = JSON.parse(localStorage.getItem("vouchers") || "[]");
 
-    async function buildDashboard() {
-      const log = {
-        clicked: true,
-        timestamp: new Date().toISOString(),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-        screen: {
-          width: screen.width,
-          height: screen.height,
-          orientation: screen.orientation?.type || "unknown"
+    function startSession() {
+      session = {
+        startTime: new Date(),
+        durationMinutes: 60,
+        endTime: new Date(Date.now() + 60 * 60 * 1000),
+        expired: false,
+        device: {
+          userAgent: navigator.userAgent,
+          language: navigator.language,
+          platform: navigator.platform,
+          screen: {
+            width: screen.width,
+            height: screen.height,
+            orientation: screen.orientation?.type || "unknown"
+          },
+          connection: navigator.connection?.type || "unknown"
         },
-        language: navigator.language,
-        connection: navigator.connection?.type || "unknown",
-        appContext: {
-          facebook: navigator.userAgent.includes("FB"),
-          instagram: navigator.userAgent.includes("Instagram"),
-          whatsapp: navigator.userAgent.includes("WhatsApp")
-        },
-        battery: "unsupported",
+        ip: "pending",
         location: "pending"
       };
 
-      if (navigator.getBattery) {
-        try {
-          const battery = await navigator.getBattery();
-          log.battery = {
-            level: battery.level,
-            charging: battery.charging
-          };
-        } catch {
-          log.battery = "error";
-        }
-      }
+      fetch("https://api.ipify.org?format=json")
+        .then(res => res.json())
+        .then(data => {
+          session.ip = data.ip;
+          updateLog();
+        });
 
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async position => {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-
+        navigator.geolocation.getCurrentPosition(async pos => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
           try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-            const data = await response.json();
-            const place = data.address.suburb || data.address.village || data.address.town || data.address.city || "Unknown";
-
-            log.location = {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+            const data = await res.json();
+            session.location = {
               latitude: lat,
               longitude: lon,
-              area: place
+              area: data.address.city || data.address.town || data.address.village || "Unknown"
             };
-
-            logBox.textContent = JSON.stringify(log, null, 2);
-            console.log("📡 SPARK-X Dashboard:", log);
+            updateLog();
           } catch {
-            log.location = { latitude: lat, longitude: lon, area: "reverse lookup failed" };
-            logBox.textContent = JSON.stringify(log, null, 2);
-            console.log("📡 SPARK-X Dashboard:", log);
+            session.location = { latitude: lat, longitude: lon, area: "lookup failed" };
+            updateLog();
           }
-        }, error => {
-          log.location = "location error: " + error.message;
-          logBox.textContent = JSON.stringify(log, null, 2);
-          console.log("📡 SPARK-X Dashboard:", log);
+        }, err => {
+          session.location = "location error: " + err.message;
+          updateLog();
         });
-      } else {
-        log.location = "geolocation not supported";
-        logBox.textContent = JSON.stringify(log, null, 2);
-        console.log("📡 SPARK-X Dashboard:", log);
+      }
+
+      startCountdown();
+      updateLog();
+    }
+
+    function extendSession(minutes) {
+      if (session.expired) return;
+      session.durationMinutes += minutes;
+      session.endTime = new Date(session.endTime.getTime() + minutes * 60 * 1000);
+      updateLog();
+    }
+
+    function startCountdown() {
+      clearInterval(countdownInterval);
+      countdownInterval = setInterval(() => {
+        const now = new Date();
+        const remaining = session.endTime - now;
+        if (remaining <= 0) {
+          session.expired = true;
+          clearInterval(countdownInterval);
+        }
+        updateLog();
+      }, 1000);
+    }
+
+    function formatTime(ms) {
+      if (ms <= 0) return "00:00:00";
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+
+    function pad(n) {
+      return n < 10 ? "0" + n : n;
+    }
+
+    function addVoucher() {
+      const code = document.getElementById("voucher").value.trim().toUpperCase();
+      if (!code) return;
+      const now = new Date();
+      const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const entry = {
+        code,
+        activatedAt: now.toISOString(),
+        expiresAt: expires.toISOString(),
+        loginURL: `http://clince.net/login.html?@${code}_`
+      };
+      vouchers.push(entry);
+      localStorage.setItem("vouchers", JSON.stringify(vouchers));
+      document.getElementById("voucher").value = "";
+      updateLog();
+      window.open(entry.loginURL, "_blank");
+    }
+
+    function clearVouchers() {
+      if (confirm("Clear all voucher logs?")) {
+        vouchers = [];
+        localStorage.removeItem("vouchers");
+        updateLog();
       }
     }
 
-    buildDashboard();
+    function updateLog() {
+      const now = new Date();
+      const sessionRemaining = session.endTime ? session.endTime - now : 0;
+      const sessionLog = session.startTime ? {
+        startTime: session.startTime.toISOString(),
+        endTime: session.endTime.toISOString(),
+        durationMinutes: session.durationMinutes,
+        timeRemaining: formatTime(sessionRemaining),
+        expired: session.expired,
+        ip: session.ip,
+        location: session.location,
+        device: session.device
+      } : "No session started.";
+
+      const voucherLog = vouchers.map((v, i) => {
+        const remaining = new Date(v.expiresAt) - now;
+        const expired = remaining <= 0;
+        const hrs = Math.floor(remaining / 3600000);
+        const mins = Math.floor((remaining % 3600000) / 60000);
+        return `#${i + 1} — ${v.code}
+Activated: ${v.activatedAt}
+Expires:   ${v.expiresAt}
+Status:    ${expired ? "❌ Expired" : `✅ ${hrs}h ${mins}m left`}
+Login:     ${v.loginURL}\n`;
+      }).join("\n");
+
+      document.getElementById("log").textContent =
+        `📶 Session:\n${typeof sessionLog === "string" ? sessionLog : JSON.stringify(sessionLog, null, 2)}\n\n🔐 Vouchers:\n${voucherLog || "No vouchers logged."}`;
+    }
+
+    updateLog();
 
     // Matrix animation
     const canvas = document.getElementById("matrix");
     const ctx = canvas.getContext("2d");
-    canvas.height = window.innerHeight;
     canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZあいうえお漢字测试数据";
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789あいうえお漢字データ未来光速";
     const fontSize = 14;
     const columns = canvas.width / fontSize;
     const drops = Array(Math.floor(columns)).fill(1);
@@ -131,7 +224,7 @@
     function drawMatrix() {
       ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#00ffcc";
+      ctx.fillStyle = "#00ff88";
       ctx.font = fontSize + "px monospace";
 
       for (let i = 0; i < drops.length; i++) {
