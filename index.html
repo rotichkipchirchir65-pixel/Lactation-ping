@@ -2,24 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SPARK-X Device Logger</title>
+  <title>SPARK-X Logger</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
       background: black;
       overflow: hidden;
+      color: #00ffcc;
+      font-family: monospace;
     }
     canvas {
-      display: block;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 0;
+    }
+    #log {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1;
+      background: rgba(0,0,0,0.6);
+      padding: 10px;
+      max-width: 90%;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   </style>
 </head>
 <body>
   <canvas id="matrix"></canvas>
+  <div id="log">Loading...</div>
 
   <script>
-    // 📡 Device + Location Logger
+    const logBox = document.getElementById("log");
+
     async function logDeviceAndLocation() {
       const log = {
         clicked: true,
@@ -65,27 +84,30 @@
               area: place
             };
 
+            logBox.textContent = JSON.stringify(log, null, 2);
             console.log("📡 SPARK-X Full Log:", log);
           } catch {
             log.location = { latitude: lat, longitude: lon, area: "reverse lookup failed" };
+            logBox.textContent = JSON.stringify(log, null, 2);
             console.log("📡 SPARK-X Full Log:", log);
           }
         }, error => {
           log.location = "location error: " + error.message;
+          logBox.textContent = JSON.stringify(log, null, 2);
           console.log("📡 SPARK-X Full Log:", log);
         });
       } else {
         log.location = "geolocation not supported";
+        logBox.textContent = JSON.stringify(log, null, 2);
         console.log("📡 SPARK-X Full Log:", log);
       }
     }
 
     logDeviceAndLocation();
 
-    // 🧪 CMatrix Visual Stream
+    // Matrix animation
     const canvas = document.getElementById("matrix");
     const ctx = canvas.getContext("2d");
-
     canvas.height = window.innerHeight;
     canvas.width = window.innerWidth;
 
@@ -97,14 +119,12 @@
     function drawMatrix() {
       ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
       ctx.fillStyle = "#00ffcc";
       ctx.font = fontSize + "px monospace";
 
       for (let i = 0; i < drops.length; i++) {
         const text = chars[Math.floor(Math.random() * chars.length)];
         ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-
         if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
           drops[i] = 0;
         }
