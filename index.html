@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SPARK-X Wi-Fi Tracker</title>
+  <title>SPARK-X Wi-Fi + Voucher Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
   <style>
     body {
       background: #0f0f0f;
-      color: #00ff88;
+      color: #00ccff;
       font-family: 'Fira Code', monospace;
       padding: 20px;
       position: relative;
@@ -18,18 +18,19 @@
       padding: 8px;
       margin: 6px 4px;
       background: #111;
-      color: #00ff88;
-      border: 1px solid #00ff88;
+      color: #00ccff;
+      border: 1px solid #00ccff;
       border-radius: 4px;
     }
     #log {
       white-space: pre-wrap;
       margin-top: 20px;
-      background: rgba(0,255,136,0.1);
+      background: rgba(0, 0, 255, 0.05);
       padding: 12px;
       border-radius: 6px;
-      border: 1px solid #00ff88;
-      box-shadow: 0 0 10px rgba(0,255,136,0.3);
+      border: 1px solid #00ccff;
+      box-shadow: 0 0 12px #00ccff, 0 0 20px #00ccff;
+      color: #00ccff;
       position: relative;
       z-index: 1;
     }
@@ -45,10 +46,10 @@
 <body>
   <canvas id="matrix"></canvas>
 
-  <h1>📡 SPARK-X Wi-Fi Tracker</h1>
+  <h1>📡 SPARK-X Wi-Fi + Voucher Tracker</h1>
 
   <h3>🔐 Voucher Activation</h3>
-  <input type="text" id="voucher" placeholder="Enter voucher code (e.g. FBJVSD8)">
+  <input type="text" id="voucher" placeholder="Enter new voucher code">
   <button onclick="addVoucher()">Activate Voucher</button>
   <button onclick="clearVouchers()">Clear Vouchers</button>
 
@@ -56,13 +57,31 @@
   <button onclick="extendSession(30)">Extend +30 min</button>
   <button onclick="extendSession(60)">Extend +1 hour</button>
 
-  <div id="log">Initializing session...</div>
+  <div id="log">Initializing...</div>
 
   <script>
     let session = {};
     let countdownInterval;
     let vouchers = JSON.parse(localStorage.getItem("vouchers") || "[]");
 
+    // Detect voucher from URL (e.g., http://.../login.html?@FBJVSD8_)
+    function detectVoucherFromURL() {
+      const url = window.location.href;
+      const match = url.match(/@([A-Z0-9]+)_/);
+      if (match) {
+        const code = match[1];
+        const now = new Date();
+        const entry = {
+          code,
+          activatedAt: now.toISOString(),
+          loginURL: url
+        };
+        vouchers.push(entry);
+        localStorage.setItem("vouchers", JSON.stringify(vouchers));
+      }
+    }
+
+    // Auto-start session
     function autoStartSession() {
       session = {
         startTime: new Date(),
@@ -84,13 +103,18 @@
         location: "pending"
       };
 
+      // Public IP
       fetch("https://api.ipify.org?format=json")
         .then(res => res.json())
         .then(data => {
           session.ip = data.ip;
           updateLog();
+        }).catch(() => {
+          session.ip = "lookup failed";
+          updateLog();
         });
 
+      // Geolocation + reverse geocode
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(async pos => {
           const lat = pos.coords.latitude;
@@ -101,7 +125,7 @@
             session.location = {
               latitude: lat,
               longitude: lon,
-              area: data.address.city || data.address.town || data.address.village || "Unknown"
+              area: data.address?.city || data.address?.town || data.address?.village || "Unknown"
             };
             updateLog();
           } catch {
@@ -151,15 +175,14 @@
       return n < 10 ? "0" + n : n;
     }
 
+    // Manual voucher activation (logs real activation time, opens login URL)
     function addVoucher() {
       const code = document.getElementById("voucher").value.trim().toUpperCase();
       if (!code) return;
       const now = new Date();
-      const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       const entry = {
         code,
         activatedAt: now.toISOString(),
-        expiresAt: expires.toISOString(),
         loginURL: `http://clince.net/login.html?@${code}_`
       };
       vouchers.push(entry);
@@ -192,14 +215,18 @@
       } : "No session started.";
 
       const voucherLog = vouchers.map((v, i) => {
-        const remaining = new Date(v.expiresAt) - now;
+        const activated = new Date(v.activatedAt);
+        const elapsed = now - activated;
+        const remaining = 24 * 60 * 60 * 1000 - elapsed; // Estimated remaining based on 24h lifetime
         const expired = remaining <= 0;
-        const hrs = Math.floor(remaining / 3600000);
-        const mins = Math.floor((remaining % 3600000) / 60000);
+        const hrsUsed = Math.floor(elapsed / 3600000);
+        const minsUsed = Math.floor((elapsed % 3600000) / 60000);
+        const hrsLeft = Math.max(0, Math.floor(remaining / 3600000));
+        const minsLeft = Math.max(0, Math.floor((remaining % 3600000) / 60000));
         return `#${i + 1} — ${v.code}
 Activated: ${v.activatedAt}
-Expires:   ${v.expiresAt}
-Status:    ${expired ? "❌ Expired" : `✅ ${hrs}h ${mins}m left`}
+Used:      ${hrsUsed}h ${minsUsed}m
+Remaining: ${expired ? "❌ Expired" : `✅ ~${hrsLeft}h ${minsLeft}m`}
 Login:     ${v.loginURL}\n`;
       }).join("\n");
 
@@ -207,23 +234,34 @@ Login:     ${v.loginURL}\n`;
         `📶 Session:\n${typeof sessionLog === "string" ? sessionLog : JSON.stringify(sessionLog, null, 2)}\n\n🔐 Vouchers:\n${voucherLog || "No vouchers logged."}`;
     }
 
+    // Initialize
+    detectVoucherFromURL();
     autoStartSession();
 
-    // Matrix animation
+    // Matrix animation (letters, numbers, Chinese/Japanese)
     const canvas = document.getElementById("matrix");
     const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    function sizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    sizeCanvas();
+    window.addEventListener('resize', () => {
+      sizeCanvas();
+      // Recalculate columns/drops on resize
+      drops.length = 0;
+      const newCols = Math.floor(canvas.width / fontSize);
+      for (let i = 0; i < newCols; i++) drops.push(1);
+    });
 
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789あいうえお漢字データ未来光速";
     const fontSize = 14;
-    const columns = canvas.width / fontSize;
-    const drops = Array(Math.floor(columns)).fill(1);
+    let drops = Array(Math.floor(canvas.width / fontSize)).fill(1);
 
     function drawMatrix() {
       ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#00ff88";
+      ctx.fillStyle = "#00ccff";
       ctx.font = fontSize + "px monospace";
 
       for (let i = 0; i < drops.length; i++) {
