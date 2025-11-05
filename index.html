@@ -64,24 +64,18 @@
     let countdownInterval;
     let vouchers = JSON.parse(localStorage.getItem("vouchers") || "[]");
 
-    // Detect voucher from URL (e.g., http://.../login.html?@FBJVSD8_)
     function detectVoucherFromURL() {
       const url = window.location.href;
       const match = url.match(/@([A-Z0-9]+)_/);
       if (match) {
         const code = match[1];
         const now = new Date();
-        const entry = {
-          code,
-          activatedAt: now.toISOString(),
-          loginURL: url
-        };
+        const entry = { code, activatedAt: now.toISOString(), loginURL: url };
         vouchers.push(entry);
         localStorage.setItem("vouchers", JSON.stringify(vouchers));
       }
     }
 
-    // Auto-start session
     function autoStartSession() {
       session = {
         startTime: new Date(),
@@ -103,33 +97,35 @@
         location: "pending"
       };
 
-      // Public IP
       fetch("https://api.ipify.org?format=json")
         .then(res => res.json())
-        .then(data => {
-          session.ip = data.ip;
-          updateLog();
-        }).catch(() => {
-          session.ip = "lookup failed";
-          updateLog();
-        });
+        .then(data => { session.ip = data.ip; updateLog(); })
+        .catch(() => { session.ip = "lookup failed"; updateLog(); });
 
-      // Geolocation + reverse geocode
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(async pos => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
           try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`);
             const data = await res.json();
+            const addr = data.address || {};
             session.location = {
               latitude: lat,
               longitude: lon,
-              area: data.address?.city || data.address?.town || data.address?.village || "Unknown"
+              country: addr.country || "Unknown",
+              county: addr.county || "Unknown",
+              division: addr.state_district || addr.state || "Unknown",
+              subcounty: addr.subcounty || "Unknown",
+              ward: addr.suburb || addr.ward || "Unknown",
+              village: addr.village || addr.hamlet || "Unknown",
+              road: addr.road || "Unknown",
+              house: addr.house_number || "Unknown",
+              fullAddress: data.display_name || "Unknown"
             };
             updateLog();
           } catch {
-            session.location = { latitude: lat, longitude: lon, area: "lookup failed" };
+            session.location = { latitude: lat, longitude: lon, error: "lookup failed" };
             updateLog();
           }
         }, err => {
@@ -170,21 +166,13 @@
       const seconds = totalSeconds % 60;
       return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
     }
+    function pad(n) { return n < 10 ? "0" + n : n; }
 
-    function pad(n) {
-      return n < 10 ? "0" + n : n;
-    }
-
-    // Manual voucher activation (logs real activation time, opens login URL)
     function addVoucher() {
       const code = document.getElementById("voucher").value.trim().toUpperCase();
       if (!code) return;
       const now = new Date();
-      const entry = {
-        code,
-        activatedAt: now.toISOString(),
-        loginURL: `http://clince.net/login.html?@${code}_`
-      };
+      const entry = { code, activatedAt: now.toISOString(), loginURL: `http://clince.net/login.html?@${code}_` };
       vouchers.push(entry);
       localStorage.setItem("vouchers", JSON.stringify(vouchers));
       document.getElementById("voucher").value = "";
@@ -217,7 +205,7 @@
       const voucherLog = vouchers.map((v, i) => {
         const activated = new Date(v.activatedAt);
         const elapsed = now - activated;
-        const remaining = 24 * 60 * 60 * 1000 - elapsed; // Estimated remaining based on 24h lifetime
+        const remaining = 24 * 60 * 60 * 1000 - elapsed;
         const expired = remaining <= 0;
         const hrsUsed = Math.floor(elapsed / 3600000);
         const minsUsed = Math.floor((elapsed % 3600000) / 60000);
@@ -234,11 +222,10 @@ Login:     ${v.loginURL}\n`;
         `📶 Session:\n${typeof sessionLog === "string" ? sessionLog : JSON.stringify(sessionLog, null, 2)}\n\n🔐 Vouchers:\n${voucherLog || "No vouchers logged."}`;
     }
 
-    // Initialize
     detectVoucherFromURL();
     autoStartSession();
 
-    // Matrix animation (letters, numbers, Chinese/Japanese)
+    // Matrix animation (green)
     const canvas = document.getElementById("matrix");
     const ctx = canvas.getContext("2d");
     function sizeCanvas() {
@@ -246,27 +233,26 @@ Login:     ${v.loginURL}\n`;
       canvas.height = window.innerHeight;
     }
     sizeCanvas();
-    window.addEventListener('resize', () => {
-      sizeCanvas();
-      // Recalculate columns/drops on resize
-      drops.length = 0;
-      const newCols = Math.floor(canvas.width / fontSize);
-      for (let i = 0; i < newCols; i++) drops.push(1);
-    });
+    window.addEventListener("resize", sizeCanvas);
 
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789あいうえお漢字データ未来光速";
     const fontSize = 14;
     let drops = Array(Math.floor(canvas.width / fontSize)).fill(1);
 
     function drawMatrix() {
+      // semi-transparent black background to create trailing effect
       ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#00ccff";
+
+      // matrix characters in green
+      ctx.fillStyle = "#00ff88";
       ctx.font = fontSize + "px monospace";
 
       for (let i = 0; i < drops.length; i++) {
         const text = chars[Math.floor(Math.random() * chars.length)];
         ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+        // reset drop randomly after it passes bottom
         if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
           drops[i] = 0;
         }
