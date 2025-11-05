@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SPARK-X Wi-Fi + Voucher + Device Tracker</title>
+  <title>SPARK-X Wi-Fi Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
   <style>
     body {
@@ -37,7 +37,7 @@
       position: fixed;
       top: 0;
       left: 0;
-      z-index: 0;
+      z-index: -1;
       pointer-events: none;
     }
   </style>
@@ -45,26 +45,25 @@
 <body>
   <canvas id="matrix"></canvas>
 
-  <h1>📡 SPARK-X Wi-Fi + Voucher + Device Tracker</h1>
+  <h1>📡 SPARK-X Wi-Fi Tracker</h1>
 
   <h3>🔐 Voucher Activation</h3>
   <input type="text" id="voucher" placeholder="Enter voucher code (e.g. FBJVSD8)">
   <button onclick="addVoucher()">Activate Voucher</button>
   <button onclick="clearVouchers()">Clear Vouchers</button>
 
-  <h3>⏱ Session Control</h3>
-  <button onclick="startSession()">Start Session</button>
+  <h3>⏱ Extend Session</h3>
   <button onclick="extendSession(30)">Extend +30 min</button>
   <button onclick="extendSession(60)">Extend +1 hour</button>
 
-  <div id="log">No session or voucher activity yet.</div>
+  <div id="log">Initializing session...</div>
 
   <script>
     let session = {};
     let countdownInterval;
     let vouchers = JSON.parse(localStorage.getItem("vouchers") || "[]");
 
-    function startSession() {
+    function autoStartSession() {
       session = {
         startTime: new Date(),
         durationMinutes: 60,
@@ -208,7 +207,7 @@ Login:     ${v.loginURL}\n`;
         `📶 Session:\n${typeof sessionLog === "string" ? sessionLog : JSON.stringify(sessionLog, null, 2)}\n\n🔐 Vouchers:\n${voucherLog || "No vouchers logged."}`;
     }
 
-    updateLog();
+    autoStartSession();
 
     // Matrix animation
     const canvas = document.getElementById("matrix");
